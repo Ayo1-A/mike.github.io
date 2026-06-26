@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Posting App with Auth & Images</title>
+    <style>
+        :root {
+            --bg-color: #f0f2f5;
+            --card-bg: #ffffff;
+            --text-primary: #1c1e21;
+            --text-secondary: #65676b;
+            --accent-color: #4f46e5;
+            --accent-hover: #4338ca;
+            --border-color: #e4e6eb;
+            --shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            --shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.15);
+            --radius: 12px;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --success: #10b981;
+        }
+
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            line-height: 1.5;
+        }
+
+        /* Auth Screen */
+        .auth-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg-color); z-index: 2000;
+            display: none; align-items: center; justify-content: center; padding: 20px;
+        }
+        .auth-card {
+            background: var(--card-bg); border-radius: var(--radius);
+            box-shadow: var(--shadow-hover); padding: 32px; width: 100%; max-width: 400px; text-align: center;
+        }
+        .auth-card h1 { margin: 0 0 8px; font-size: 24px; color: var(--text-primary); }
+        .auth-card .subtitle { margin: 0 0 24px; color: var(--text-secondary); font-size: 14px; }
+        .auth-card input {
+            width: 100%; padding: 12px 16px; margin-bottom: 12px;
+            border: 1px solid var(--border-color); border-radius: 8px;
+            font-size: 15px; outline: none; box-sizing: border-box; transition: border-color 0.2s;
+        }
+        .auth-card input:focus { border-color: var(--accent-color); }
+        .auth-card button { width: 100%; padding: 12px; font-size: 16px; margin-top: 8px; }
+        .auth-toggle { margin-top: 20px; font-size: 14px; color: var(--text-secondary); }
+        .auth-toggle a { color: var(--accent-color); text-decoration: none; font-weight: 600; cursor: pointer; }
+        .auth-toggle a:hover { text-decoration: underline; }
+
+        /* Main App */
+        .app-container { max-width: 600px; margin: 0 auto; padding: 20px 15px; display: none; }
+        .app-header { text-align: center; margin-bottom: 24px; }
+        .app-header h1 { margin: 0; font-size: 28px; font-weight: 700; }
+        .subtitle { margin: 4px 0 0; color: var(--text-secondary); font-size: 16px; }
+
+        .status-toast {
+            position: fixed; top: 20px; left: 50%;
+            transform: translateX(-50%) translateY(-100px);
+            background: var(--card-bg); color: var(--text-primary);
+            padding: 12px 24px; border-radius: 50px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            font-weight: 500; font-size: 14px;
+            transition: transform 0.3s ease;
+            z-index: 1000; display: flex; align-items: center; gap: 8px;
+            max-width: 90%; text-align: center; justify-content: center;
+        }
+        .status-toast.show { transform: translateX(-50%) translateY(0); }
+        .status-toast.success { background: var(--success); color: white; }
+        .status-toast.error { background: var(--danger); color: white; }
+
+        .card {
+            background: var(--card-bg); border-radius: var(--radius);
+            box-shadow: var(--shadow); margin-bottom: 20px; overflow: hidden;
+        }
+
+        .composer-card { padding: 16px; }
+        .composer-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+        .avatar {
+            width: 40px; height: 40px; border-radius: 50%;
+            background: var(--accent-color); color: white;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 600; flex-shrink: 0;
+        }
+        .author-input {
+            flex: 1; border: none; background: var(--bg-color);
+            padding: 10px 16px; border-radius: 20px; font-size: 15px; outline: none;
+        }
+        .btn-logout {
+            background: transparent; color: var(--danger); border: 1px solid var(--danger);
+            padding: 6px 12px; font-size: 13px; border-radius: 20px;
+        }
+        .btn-logout:hover { background: var(--danger); color: white; }
+
+        textarea {
+            width: 100%; border: none; background: transparent;
+            font-size: 16px; resize: none; outline: none;
+            padding: 0; margin-bottom: 12px; min-height: 80px;
+            font-family: inherit; color: var(--text-primary); box-sizing: border-box;
+        }
+
+        /* Image Preview Styles */
+        .image-preview-wrapper { margin: 12px 0; position: relative; }
+        .image-preview-container {
+            position: relative; border-radius: var(--radius); overflow: hidden;
+            border: 2px solid var(--accent-color); max-width: 100%; display: none;
+            background: var(--bg-color); box-shadow: var(--shadow-hover);
+        }
+        .image-preview-container.show { display: block; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        .image-preview-container img { display: block; width: 100%; max-height: 400px; object-fit: contain; background: var(--bg-color); }
+        .image-preview-loading {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            display: none; flex-direction: column; align-items: center; gap: 12px;
+            background: rgba(255,255,255,0.95); padding: 20px 40px; border-radius: var(--radius);
+        }
+        .image-preview-loading.show { display: flex; }
+        .loading-spinner-small {
+            width: 40px; height: 40px; border: 4px solid var(--border-color);
+            border-top-color: var(--accent-color); border-radius: 50%; animation: spin 1s linear infinite;
+        }
+        .remove-image-btn {
+            position: absolute; top: 10px; right: 10px; background: rgba(239, 68, 68, 0.95);
+            color: white; border: none; border-radius: 50%; width: 36px; height: 36px;
+            font-size: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3); z-index: 10;
+        }
+        .remove-image-btn:hover { background: var(--danger); transform: scale(1.1); }
+        .image-info {
+            position: absolute; bottom: 0; left: 0; right: 0;
+            background: linear-gradient(transparent, rgba(0,0,0,0.7)); color: white;
+            padding: 20px 12px 8px; font-size: 12px; display: flex; justify-content: space-between;
+        }
+
+        .image-upload-label {
+            display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px;
+            background: var(--bg-color); border: 2px dashed var(--border-color); border-radius: 8px;
+            cursor: pointer; font-size: 14px; color: var(--text-secondary); transition: all 0.2s;
+        }
+        .image-upload-label:hover { border-color: var(--accent-color); color: var(--accent-color); background: #eef2ff; }
+        .image-upload-label input[type="file"] { display: none; }
+
+        .composer-footer {
+            display: flex; justify-content: space-between; align-items: center;
+            border-top: 1px solid var(--border-color); padding-top: 12px; flex-wrap: wrap; gap: 12px;
+        }
+        .char-counter { font-size: 13px; color: var(--text-secondary); }
+        .actions { display: flex; gap: 8px; align-items: center; }
+
+        button {
+            cursor: pointer; font-family: inherit; font-size: 15px; font-weight: 600;
+            border: none; border-radius: 8px; transition: all 0.2s;
+        }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+        .btn-primary { background: var(--accent-color); color: white; padding: 8px 20px; }
+        .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+        .btn-secondary { background: transparent; color: var(--text-secondary); padding: 8px 16px; }
+        .btn-secondary:hover { background: var(--bg-color); }
+        .btn-danger { background: var(--danger); color: white; padding: 8px 20px; }
+
+        .btn-icon {
+            background: transparent; color: var(--text-secondary); padding: 8px;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+        }
+        .btn-icon:hover { background: var(--bg-color); color: var(--accent-color); }
+
+        .feed-section { margin-top: 10px; }
+        .feed-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding: 0 4px; }
+        .feed-header h2 { margin: 0; font-size: 20px; font-weight: 700; }
+        .feed-container { display: flex; flex-direction: column; gap: 16px; }
+
+        .post-item {
+            background: var(--card-bg); border-radius: var(--radius); box-shadow: var(--shadow);
+            padding: 16px; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .post-item:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); }
+        .post-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+        .post-avatar {
+            width: 36px; height: 36px; border-radius: 50%; background: #e0e7ff;
+            color: var(--accent-color); display: flex; align-items: center; justify-content: center;
+            font-weight: 600; font-size: 14px; flex-shrink: 0;
+        }
+        .post-meta { display: flex; flex-direction: column; }
+        .post-author { 
+            font-weight: 600; font-size: 15px; color: var(--accent-color);
+            cursor: pointer; text-decoration: none;
+        }
+        .post-author:hover { text-decoration: underline; }
+        .post-time { font-size: 13px; color: var(--text-secondary); }
+        .post-content { font-size: 15px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; margin: 0; }
+
+        .post-image {
+            max-width: 100%; max-height: 400px; border-radius: 8px; margin-top: 8px;
+            cursor: pointer; display: block; object-fit: cover;
+        }
+
+        /* Profile & Admin Views */
+        .profile-view, .admin-view { display: none; }
+        .profile-view.show, .admin-view.show { display: block; }
+        
+        .profile-card, .admin-card {
+            background: var(--card-bg); border-radius: var(--radius);
+            box-shadow: var(--shadow); padding: 24px; margin-bottom: 24px; text-align: center;
+        }
+        
+        .profile-avatar-large {
+            width: 100px; height: 100px; border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent-color), var(--accent-hover));
+            color: white; display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 48px; margin: 0 auto 16px;
+            box-shadow: var(--shadow-hover);
+        }
+        
+        .profile-username { font-size: 24px; font-weight: 700; margin: 0 0 4px; }
+        .profile-email { font-size: 14px; color: var(--text-secondary); margin: 0 0 12px; }
+        
+        .profile-stats {
+            display: flex; justify-content: center; gap: 24px; margin-top: 16px;
+            padding-top: 16px; border-top: 1px solid var(--border-color);
+        }
+        .profile-stat-value { font-size: 20px; font-weight: 700; color: var(--accent-color); }
+        .profile-stat-label { font-size: 12px; color: var(--text-secondary); text-transform: uppercase; }
+        
+        .view-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 16px; padding: 0 4px;
+        }
+        .view-header h2 { margin: 0; font-size: 20px; font-weight: 700; }
+        
+        .btn-back {
+            background: transparent; color: var(--accent-color); border: 1px solid var(--accent-color);
+            padding: 8px 16px; font-size: 14px; border-radius: 8px;
+        }
+        .btn-back:hover { background: var(--accent-color); color: white; }
+
+        /* Admin Table Styles */
+        .admin-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+        .admin-table th, .admin-table td { padding: 10px; text-align: left; border-bottom: 1px solid var(--border-color); }
+        .admin-table th { background: var(--bg-color); font-weight: 600; font-size: 14px; color: var(--text-secondary); }
+        .admin-table tr:hover { background: #f8f9fa; }
+        .admin-table .actions-cell { text-align: right; white-space: nowrap; }
+        .admin-table .actions-cell button { padding: 4px 12px; font-size: 13px; margin-left: 4px; }
+
+        .overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px); z-index: 99;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .overlay.show { display: block; opacity: 1; }
+        .modal {
+            display: none; position: fixed; top: 50%; left: 50%;
+            transform: translate(-50%, -50%) scale(0.95);
+            background: var(--card-bg); border-radius: var(--radius);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2); width: 90%; max-width: 500px;
+            z-index: 100; max-height: 80vh; overflow-y: auto; opacity: 0;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .modal.show { display: block; opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border-color); }
+        .modal-header h2 { margin: 0; font-size: 18px; }
+        .btn-close { background: transparent; border: none; font-size: 28px; line-height: 1; color: var(--text-secondary); cursor: pointer; padding: 0 8px; }
+        .modal-content { padding: 20px; }
+
+        .loading-spinner { width: 30px; height: 30px; border: 3px solid var(--border-color); border-top-color: var(--accent-color); border-radius: 50%; animation: spin 1s linear infinite; margin: 20px auto; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .empty-state { text-align: center; padding: 40px 20px; color: var(--text-secondary); }
+    </style>
+</head>
+<body>
+
+    <!-- Auth Screen -->
+    <div id="auth-screen" class="auth-screen">
+        <div class="auth-card">
+            <h1 id="auth-title">Welcome Back</h1>
+            <p class="subtitle" id="auth-subtitle">Login to continue to the Posting App</p>
+            <form id="auth-form">
+                <div id="username-group" style="display: none;">
+                    <input type="text" id="auth-username" placeholder="Username" maxlength="50">
+                </div>
+                <input type="email" id="auth-email" placeholder="Email Address" required>
+                <input type="password" id="auth-password" placeholder="Password" required minlength="6">
+                <button type="submit" id="auth-submit-btn" class="btn-primary">Login</button>
+            </form>
+            <p class="auth-toggle">
+                <span id="auth-toggle-text">Don't have an account?</span>
+                <a href="#" id="auth-toggle-link" onclick="toggleAuthMode(event)">Sign Up</a>
+            </p>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div class="app-container">
+        <header class="app-header">
+            <h1>Posting Text App</h1>
+            <p class="subtitle">Share your thoughts and images securely</p>
+            <button id="admin-panel-btn" class="btn-primary" style="display: none; margin-top: 12px; padding: 6px 16px; font-size: 14px;" onclick="showAdminPanel()">
+                ⚙️ Admin Panel
+            </button>
+        </header>
+
+        <div id="status-message" class="status-toast">Connecting...</div>
+
+        <main class="main-content">
+            <!-- Feed View -->
+            <div id="feed-view">
+                <section class="card composer-card">
+                    <div class="composer-header">
+                        <div class="avatar" id="user-avatar">U</div>
+                        <!-- LOCKED AUTHOR INPUT: Ensures strict ownership for deletion rights -->
+                        <input type="text" id="post-author" placeholder="Your name" class="author-input" maxlength="50" readonly style="background: #e4e6eb; cursor: not-allowed;">
+                        <button type="button" class="btn-logout" onclick="logout()">Logout</button>
+                    </div>
+                    <form id="post-form">
+                        <textarea id="post-content" placeholder="What's on your mind?" maxlength="2000" rows="3"></textarea>
+                        <div class="image-preview-wrapper">
+                            <div id="image-preview-container" class="image-preview-container">
+                                <div id="image-preview-loading" class="image-preview-loading">
+                                    <div class="loading-spinner-small"></div>
+                                    <span>Loading preview...</span>
+                                </div>
+                                <img id="image-preview" src="" alt="Preview" style="display: none;">
+                                <button type="button" class="remove-image-btn" onclick="removeSelectedImage()" title="Remove image">&times;</button>
+                                <div id="image-info" class="image-info" style="display: none;">
+                                    <span id="image-filename">image.jpg</span>
+                                    <span id="image-size">0 KB</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="composer-footer">
+                            <span id="char-counter" class="char-counter">0 / 2000</span>
+                            <div class="actions">
+                                <label class="image-upload-label" title="Add an image">
+                                    <input type="file" id="image-input" accept="image/*" onchange="handleImageSelect(event)">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                        <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                        <polyline points="21 15 16 10 5 21"></polyline>
+                                    </svg>
+                                    <span>Add Image</span>
+                                </label>
+                                <button type="button" class="btn-secondary" onclick="clearForm()">Clear</button>
+                                <button type="submit" id="submit-btn" class="btn-primary">Post</button>
+                            </div>
+                        </div>
+                    </form>
+                </section>
+
+                <section class="feed-section">
+                    <div class="feed-header">
+                        <h2>Feed</h2>
+                        <button onclick="autoLoadFeed(true)" class="btn-icon" title="Refresh">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="23 4 23 10 17 10"></polyline>
+                                <polyline points="1 20 1 14 7 14"></polyline>
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    <div id="feed-container" class="feed-container">
+                        <div class="loading-spinner"></div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Profile View -->
+            <div id="profile-view" class="profile-view">
+                <div class="view-header">
+                    <h2>User Profile</h2>
+                    <button class="btn-back" onclick="showFeed()">← Back to Feed</button>
+                </div>
+                <div id="profile-container"></div>
+            </div>
+
+            <!-- Admin View -->
+            <div id="admin-view" class="admin-view">
+                <div class="view-header">
+                    <h2>Admin Panel</h2>
+                    <button class="btn-back" onclick="showFeed()">← Back to Feed</button>
+                </div>
+                <div class="card" style="padding: 20px;">
+                    <h3 style="margin-top:0; margin-bottom: 16px;">All Posts Management</h3>
+                    <div id="admin-table-container">
+                        <div class="loading-spinner"></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Post Detail Modal -->
+    <div id="overlay" class="overlay" onclick="closePostDetail()"></div>
+    <div id="post-detail" class="modal">
+        <div class="modal-header">
+            <h2>Post Detail</h2>
+            <button class="btn-close" onclick="closePostDetail()">&times;</button>
+        </div>
+        <div id="post-detail-content" class="modal-content">
+            <div class="loading-spinner"></div>
+        </div>
+    </div>
+
+    <!-- Edit Modal (Admin) -->
+    <div id="edit-overlay" class="overlay" onclick="closeEditModal()"></div>
+    <div id="edit-modal" class="modal">
+        <div class="modal-header">
+            <h2>Edit Post</h2>
+            <button class="btn-close" onclick="closeEditModal()">&times;</button>
+        </div>
+        <div class="modal-content">
+            <form id="edit-form">
+                <input type="hidden" id="edit-post-id">
+                <label style="display:block; margin-bottom: 4px; font-weight: 600; font-size: 14px;">Author Name</label>
+                <input type="text" id="edit-author" class="author-input" style="width: 100%; margin-bottom: 16px; background: var(--bg-color);" required>
+                
+                <label style="display:block; margin-bottom: 4px; font-weight: 600; font-size: 14px;">Content</label>
+                <textarea id="edit-content" rows="5" style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; font-family: inherit; font-size: 15px; resize: vertical; box-sizing: border-box;" required></textarea>
+                
+                <div style="margin-top: 20px; text-align: right;">
+                    <button type="button" class="btn-secondary" onclick="closeEditModal()">Cancel</button>
+                    <button type="submit" class="btn-primary" style="margin-left: 8px;">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. COMPLETE LIVE CREDENTIALS & ADMIN CONFIG
+        // ==========================================
+        const API_BASE = "https://p1sb756ye7r1-d.space-z.ai";
+        const API_KEY = "ptx_sk_b8f4a2c91e7d4c6b3a9052ce8d1f7a3b";
+        
+        // HARDCODED ADMIN CREDENTIALS
+        const ADMIN_EMAIL = "ayomichael120@gmail.com";
+        const ADMIN_PASSWORD = "Ayo1boy2";
+
+        let cachedPosts = [];
+        let selectedImageFile = null;
+        let currentView = 'feed';
+
+        // ==========================================
+        // 2. UTILITY & NOTIFICATION FUNCTIONS
+        // ==========================================
+        function escapeHtml(s) {
+            return String(s ?? "")
+                .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('status-message');
+            toast.textContent = message;
+            toast.className = `status-toast ${type} show`;
+            setTimeout(() => toast.classList.remove('show'), 3500);
+        }
+
+        function getFriendlyErrorMessage(error, context = 'general') {
+            const msg = (error.message || String(error)).toLowerCase();
+            if (msg.includes('failed to fetch') || msg.includes('networkerror')) return "⚠️ Connection issue.";
+            if (context === 'auth') {
+                if (msg.includes('401') || msg.includes('403') || msg.includes('invalid')) return "⚠️ Invalid email or password.";
+                if (msg.includes('404') || msg.includes('not found')) return "⚠️ No account found with this email.";
+                if (msg.includes('409') || msg.includes('exist')) return "⚠️ An account with this email already exists.";
+            }
+            if (context === 'post') {
+                if (msg.includes('413') || msg.includes('too large')) return "⚠️ The image is too large.";
+                if (msg.includes('400') || msg.includes('invalid')) return "⚠️ Invalid post data.";
+            }
+            return "⚠️ Something went wrong. Please try again.";
+        }
+
+        // ==========================================
+        // 3. PROFILE MANAGEMENT
+        // ==========================================
+        function saveUserProfile(userData) {
+            const profiles = JSON.parse(localStorage.getItem('userProfiles') || '{}');
+            profiles[userData.username] = {
+                username: userData.username,
+                email: userData.email,
+                joinDate: new Date().toISOString(),
+                avatar: userData.username.charAt(0).toUpperCase()
+            };
+            localStorage.setItem('userProfiles', JSON.stringify(profiles));
+        }
+
+        function getUserProfile(username) {
+            const profiles = JSON.parse(localStorage.getItem('userProfiles') || '{}');
+            return profiles[username] || { username, email: 'Not available', joinDate: new Date().toISOString(), avatar: username.charAt(0).toUpperCase() };
+        }
+
+        function getPostsByAuthor(authorName) {
+            return cachedPosts.filter(post => (post.authorName || 'Anonymous').toLowerCase() === authorName.toLowerCase());
+        }
+
+        function showProfile(username) {
+            currentView = 'profile';
+            document.getElementById('feed-view').style.display = 'none';
+            document.getElementById('admin-view').classList.remove('show');
+            document.getElementById('profile-view').classList.add('show');
+            renderProfile(username);
+        }
+
+        function renderProfile(username) {
+            const profile = getUserProfile(username);
+            const userPosts = getPostsByAuthor(username);
+            const container = document.getElementById('profile-container');
+            const joinDate = new Date(profile.joinDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+            const postsHtml = userPosts.length > 0
+                ? userPosts.map(post => renderPost(post, false)).join('')
+                : '<div class="empty-state"><p>No posts yet.</p></div>';
+
+            container.innerHTML = `
+                <div class="profile-card">
+                    <div class="profile-avatar-large">${profile.avatar}</div>
+                    <h2 class="profile-username">${escapeHtml(profile.username)}</h2>
+                    <p class="profile-email">${escapeHtml(profile.email)}</p>
+                    <div class="profile-stats">
+                        <div class="profile-stat">
+                            <span class="profile-stat-value">${userPosts.length}</span>
+                            <span class="profile-stat-label">Posts</span>
+                        </div>
+                    </div>
+                    <p style="font-size: 13px; color: var(--text-secondary); margin-top: 12px;">Joined ${joinDate}</p>
+                </div>
+                <div class="view-header"><h2>Posts by ${escapeHtml(profile.username)}</h2></div>
+                <div class="feed-container">${postsHtml}</div>
+            `;
+        }
+
+        // ==========================================
+        // 4. SMART API CLIENT
+        // ==========================================
+        async function apiRequest(endpoint, method = 'GET', body = null, isFormData = false) {
+            const headers = {};
+            if (endpoint.startsWith('/api/posts') && (method === 'POST' || method === 'DELETE' || method === 'PUT')) {
+                headers['X-API-Key'] = API_KEY;
+            }
+            if (!isFormData) headers['Content-Type'] = 'application/json';
+
+            try {
+                const res = await fetch(`${API_BASE}${endpoint}`, {
+                    method, headers, body: isFormData ? body : (body ? JSON.stringify(body) : null)
+                });
+                let data;
+                const contentType = res.headers.get("content-type");
+                if (contentType && contentType.indexOf("application/json") !== -1) data = await res.json();
+                else data = { message: await res.text() };
+
+                if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
+                return data;
+            } catch (error) {
+                console.error(`API Error [${method} ${endpoint}]:`, error);
+                throw error;
+            }
+        }
+
+        async function getFeed(limit = 50) { return await apiRequest(`/api/proxy/posts?limit=${limit}`, 'GET'); }
+        async function createTextPost(content, authorName) { return await apiRequest('/api/posts', 'POST', { content, authorName }); }
+        async function createPostWithImage(content, authorName, imageFile) {
+            const formData = new FormData();
+            if (content) formData.append("content", content);
+            if (authorName) formData.append("authorName", authorName);
+            formData.append("image", imageFile);
+            return await apiRequest('/api/posts', 'POST', formData, true);
+        }
+        async function deletePost(id) { return await apiRequest(`/api/posts/${id}`, 'DELETE'); }
+        
+        // ADMIN EDIT FUNCTION (Uses PUT with API Key)
+        async function updatePost(id, content, authorName) {
+            return await apiRequest(`/api/posts/${id}`, 'PUT', { content, authorName });
+        }
+
+        async function register(username, email, password) {
+            const data = await apiRequest('/api/auth/register', 'POST', { username, email, password });
+            localStorage.setItem("token", data.token);
+            localStorage.setItem("user", JSON.stringify(data.user));
+            saveUserProfile(data.user);
+            return data;
+        }
+
+        async function login(email, password) {
+            const data = await apiRequest('/api/auth/login', 'POST', { email, password });
+            localStorage.setItem("token", data.token);
+            localStorage.setItem("user", JSON.stringify(data.user));
+            saveUserProfile(data.user);
+            return data;
+        }
+
+        // ==========================================
+        // 5. IMAGE PREVIEW LOGIC
+        // ==========================================
+        function handleImageSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            if (!file.type.startsWith('image/')) { showToast("⚠️ Please select a valid image.", "error"); return; }
+            if (file.size > 5 * 1024 * 1024) { showToast("⚠️ Image must be smaller than 5MB.", "error"); return; }
+
+            selectedImageFile = file;
+            const previewContainer = document.getElementById('image-preview-container');
+            const previewImg = document.getElementById('image-preview');
+            const loadingDiv = document.getElementById('image-preview-loading');
+            const imageInfo = document.getElementById('image-info');
+
+            previewContainer.classList.add('show');
+            loadingDiv.classList.add('show');
+            previewImg.style.display = 'none';
+            imageInfo.style.display = 'none';
+
+            document.getElementById('image-filename').textContent = file.name;
+            document.getElementById('image-size').textContent = formatFileSize(file.size);
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                previewImg.src = e.target.result;
+                previewImg.onload = () => {
+                    loadingDiv.classList.remove('show');
+                    previewImg.style.display = 'block';
+                    imageInfo.style.display = 'flex';
+                };
+                previewImg.onerror = () => { removeSelectedImage(); showToast("⚠️ Could not process image.", "error"); };
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function removeSelectedImage() {
+            selectedImageFile = null;
+            document.getElementById('image-preview-container').classList.remove('show');
+            document.getElementById('image-preview-loading').classList.remove('show');
+            document.getElementById('image-preview').style.display = 'none';
+            document.getElementById('image-preview').src = '';
+            document.getElementById('image-info').style.display = 'none';
+            document.getElementById('image-input').value = '';
+        }
+
+        // ==========================================
+        // 6. RENDER & UI LOGIC
+        // ==========================================
+        function renderPost(post, makeClickable = true) {
+            const fullImageUrl = post.imageUrl ? `${API_BASE}${post.imageUrl}` : null;
+            const authorName = post.authorName || 'Anonymous';
+            const imageHtml = fullImageUrl ? `<img src="${fullImageUrl}" alt="Post image" class="post-image" onerror="this.remove()" onclick="event.stopPropagation(); showPostDetail('${post.id}')" />` : "";
+            const initial = escapeHtml((authorName || 'A').charAt(0).toUpperCase());
+            const author = escapeHtml(authorName);
+            const time = new Date(post.createdAt).toLocaleString();
+
+            const authorHtml = makeClickable && authorName !== 'Anonymous'
+                ? `<a href="#" class="post-author" onclick="event.stopPropagation(); showProfile('${authorName}')">${author}</a>`
+                : `<span class="post-author" style="cursor: default; color: var(--text-primary);">${author}</span>`;
+
+            return `
+                <div class="post-item" onclick="${makeClickable ? `showPostDetail('${post.id}')` : ''}">
+                    <div class="post-header">
+                        <div class="post-avatar">${initial}</div>
+                        <div class="post-meta">
+                            ${authorHtml}
+                            <span class="post-time">${time}</span>
+                        </div>
+                    </div>
+                    ${post.content ? `<p class="post-content">${escapeHtml(post.content)}</p>` : ''}
+                    ${imageHtml}
+                </div>
+            `;
+        }
+
+        let feedController = null;
+        async function autoLoadFeed(isManualRefresh = false) {
+            if (feedController) feedController.abort();
+            feedController = new AbortController();
+            const feedContainer = document.getElementById('feed-container');
+            feedContainer.innerHTML = '<div class="loading-spinner"></div>';
+            
+            try {
+                const data = await getFeed(50);
+                cachedPosts = data.posts || [];
+                feedContainer.innerHTML = cachedPosts.length === 0 
+                    ? '<div class="empty-state"><p>No posts yet. Be the first!</p></div>'
+                    : cachedPosts.map(post => renderPost(post)).join('');
+                if (isManualRefresh) showToast("✅ Feed updated.", "success");
+            } catch (e) {
+                feedContainer.innerHTML = `<div class="empty-state"><p>Unable to load feed.</p><button class="btn-primary" onclick="autoLoadFeed(true)" style="margin-top: 12px;">Retry</button></div>`;
+            }
+        }
+
+        async function handlePostSubmit(event) {
+            event.preventDefault();
+            const submitBtn = document.getElementById('submit-btn');
+            const contentEl = document.getElementById('post-content');
+            const authorEl = document.getElementById('post-author');
+            const content = contentEl.value.trim();
+            const authorName = authorEl.value.trim() || "Anonymous";
+            
+            if (!content && !selectedImageFile) { showToast("⚠️ Please add text or an image.", "error"); return; }
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = selectedImageFile ? "Uploading..." : "Posting...";
+
+            try {
+                if (selectedImageFile) await createPostWithImage(content, authorName, selectedImageFile);
+                else await createTextPost(content, authorName);
+                
+                clearForm();
+                showToast("✅ Post published successfully!", "success");
+                autoLoadFeed();
+            } catch (e) {
+                showToast(getFriendlyErrorMessage(e, 'post'), "error");
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = "Post";
+            }
+        }
+
+        function showPostDetail(postId) {
+            const detailContainer = document.getElementById('post-detail');
+            const detailContent = document.getElementById('post-detail-content');
+            const overlay = document.getElementById('overlay');
+            
+            overlay.style.display = 'block';
+            setTimeout(() => overlay.classList.add('show'), 10);
+            detailContainer.style.display = 'block';
+            setTimeout(() => detailContainer.classList.add('show'), 10);
+            
+            const post = cachedPosts.find(p => String(p.id) === String(postId));
+            if (!post) { detailContent.innerHTML = "<p style='color: var(--danger);'>This post is no longer available.</p>"; return; }
+
+            const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+            const isOwner = post.authorName === currentUser.username;
+            const isAdmin = currentUser.isAdmin === true;
+
+            // CRITICAL: Only show delete button if user is the author OR an admin
+            const deleteButtonHtml = (isOwner || isAdmin) 
+                ? `<button class="btn-danger" onclick="deletePostFromDetail('${post.id}')">Delete Post</button>` 
+                : '';
+
+            const initial = escapeHtml((post.authorName || 'A').charAt(0).toUpperCase());
+            const authorName = post.authorName || 'Anonymous';
+            const author = escapeHtml(authorName);
+            const time = new Date(post.createdAt).toLocaleString();
+            
+            const authorHtml = authorName !== 'Anonymous'
+                ? `<a href="#" class="post-author" onclick="event.preventDefault(); closePostDetail(); showProfile('${authorName}')">${author}</a>`
+                : `<span class="post-author" style="cursor: default; color: var(--text-primary);">${author}</span>`;
+            
+            const fullImageUrl = post.imageUrl ? `${API_BASE}${post.imageUrl}` : null;
+            const imageHtml = fullImageUrl ? `<img src="${fullImageUrl}" class="post-image" style="margin-top: 16px;" onerror="this.remove()" />` : '';
+
+            detailContent.innerHTML = `
+                <div class="post-header">
+                    <div class="post-avatar">${initial}</div>
+                    <div class="post-meta">
+                        ${authorHtml}
+                        <span class="post-time">${time}</span>
+                    </div>
+                </div>
+                ${post.content ? `<p class="post-content" style="margin-top: 16px; font-size: 16px;">${escapeHtml(post.content)}</p>` : ''}
+                ${imageHtml}
+                <div style="margin-top: 20px; text-align: right; border-top: 1px solid var(--border-color); padding-top: 16px;">
+                    ${deleteButtonHtml}
+                </div>
+            `;
+        }
+
+        async function deletePostFromDetail(postId) {
+            if(!confirm("Are you sure you want to delete this post?")) return;
+            try {
+                await deletePost(postId);
+                closePostDetail();
+                showToast("🗑️ Post deleted.", "success");
+                if (currentView === 'admin') loadAdminData();
+                else autoLoadFeed();
+            } catch (e) {
+                showToast(getFriendlyErrorMessage(e, 'post'), "error");
+            }
+        }
+
+        function closePostDetail() {
+            document.getElementById('post-detail').classList.remove('show');
+            document.getElementById('overlay').classList.remove('show');
+            setTimeout(() => {
+                document.getElementById('post-detail').style.display = 'none';
+                document.getElementById('overlay').style.display = 'none';
+            }, 300);
+        }
+
+        function clearForm() {
+            document.getElementById('post-content').value = '';
+            document.getElementById('char-counter').textContent = '0 / 2000';
+            removeSelectedImage();
+        }
+
+        // ==========================================
+        // 7. ADMIN PANEL LOGIC
+        // ==========================================
+        function showAdminPanel() {
+            currentView = 'admin';
+            document.getElementById('feed-view').style.display = 'none';
+            document.getElementById('profile-view').classList.remove('show');
+            document.getElementById('admin-view').classList.add('show');
+            loadAdminData();
+        }
+
+        function showFeed() {
+            currentView = 'feed';
+            document.getElementById('admin-view').classList.remove('show');
+            document.getElementById('profile-view').classList.remove('show');
+            document.getElementById('feed-view').style.display = 'block';
+        }
+
+        async function loadAdminData() {
+            const container = document.getElementById('admin-table-container');
+            container.innerHTML = '<div class="loading-spinner"></div>';
+            try {
+                const data = await getFeed(200);
+                cachedPosts = data.posts || [];
+                renderAdminTable(cachedPosts);
+            } catch (e) {
+                container.innerHTML = '<p style="color: var(--danger);">Failed to load posts for admin panel.</p>';
+            }
+        }
+
+        function renderAdminTable(posts) {
+            const container = document.getElementById('admin-table-container');
+            if (posts.length === 0) { container.innerHTML = '<div class="empty-state"><p>No posts found.</p></div>'; return; }
+            
+            let html = `<table class="admin-table"><thead><tr><th>Author</th><th>Content Preview</th><th>Date</th><th class="actions-cell">Actions</th></tr></thead><tbody>`;
+            
+            posts.forEach(post => {
+                const contentPreview = (post.content || '').substring(0, 40) + (post.content?.length > 40 ? '...' : '');
+                const date = new Date(post.createdAt).toLocaleDateString();
+                const hasImage = post.imageUrl ? ' 📷' : '';
+                
+                html += `
+                    <tr>
+                        <td><strong>${escapeHtml(post.authorName)}</strong>${hasImage}</td>
+                        <td style="color: var(--text-secondary); font-size: 14px;">${escapeHtml(contentPreview)}</td>
+                        <td style="font-size: 13px; color: var(--text-secondary);">${date}</td>
+                        <td class="actions-cell">
+                            <button class="btn-secondary" onclick="showEditModal('${post.id}')">Edit</button>
+                            <button class="btn-danger" onclick="adminDeletePost('${post.id}')">Delete</button>
+                        </td>
+                    </tr>
+                `;
+            });
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        function showEditModal(postId) {
+            const post = cachedPosts.find(p => String(p.id) === String(postId));
+            if (!post) return;
+            document.getElementById('edit-post-id').value = post.id;
+            document.getElementById('edit-author').value = post.authorName || 'Anonymous';
+            document.getElementById('edit-content').value = post.content || '';
+            
+            document.getElementById('edit-overlay').style.display = 'block';
+            setTimeout(() => document.getElementById('edit-overlay').classList.add('show'), 10);
+            document.getElementById('edit-modal').style.display = 'block';
+            setTimeout(() => document.getElementById('edit-modal').classList.add('show'), 10);
+        }
+
+        function closeEditModal() {
+            document.getElementById('edit-modal').classList.remove('show');
+            document.getElementById('edit-overlay').classList.remove('show');
+            setTimeout(() => {
+                document.getElementById('edit-modal').style.display = 'none';
+                document.getElementById('edit-overlay').style.display = 'none';
+            }, 300);
+        }
+
+        async function adminDeletePost(postId) {
+            if (!confirm("Are you sure you want to delete this post? This cannot be undone.")) return;
+            try {
+                await deletePost(postId);
+                showToast("🗑️ Post deleted by Admin.", "success");
+                loadAdminData();
+                autoLoadFeed();
+            } catch (e) {
+                showToast(getFriendlyErrorMessage(e, 'post'), "error");
+            }
+        }
+
+        // ==========================================
+        // 8. AUTHENTICATION LOGIC
+        // ==========================================
+        let isLoginMode = true;
+
+        function toggleAuthMode(e) {
+            e.preventDefault();
+            isLoginMode = !isLoginMode;
+            document.getElementById('auth-title').textContent = isLoginMode ? "Welcome Back" : "Create Account";
+            document.getElementById('auth-subtitle').textContent = isLoginMode ? "Login to continue" : "Join the community";
+            document.getElementById('username-group').style.display = isLoginMode ? "none" : "block";
+            document.getElementById('auth-submit-btn').textContent = isLoginMode ? "Login" : "Sign Up";
+            document.getElementById('auth-toggle-text').textContent = isLoginMode ? "Don't have an account?" : "Already have an account?";
+            document.getElementById('auth-toggle-link').textContent = isLoginMode ? "Sign Up" : "Login";
+        }
+
+        async function handleAuthSubmit(e) {
+            e.preventDefault();
+            const submitBtn = document.getElementById('auth-submit-btn');
+            const email = document.getElementById('auth-email').value.trim();
+            const password = document.getElementById('auth-password').value;
+            const username = document.getElementById('auth-username').value.trim();
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = "Please wait...";
+
+            try {
+                // CHECK FOR HARDCODED ADMIN CREDENTIALS
+                if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+                    const adminUser = { id: "admin_001", username: "Admin", email: ADMIN_EMAIL, isAdmin: true };
+                    localStorage.setItem("token", "admin_session_token");
+                    localStorage.setItem("user", JSON.stringify(adminUser));
+                    showMainApp();
+                    showToast("✅ Welcome, Admin! Access granted.", "success");
+                    return;
+                }
+
+                if (isLoginMode) {
+                    await login(email, password);
+                    showToast("✅ Welcome back! Login successful.", "success");
+                } else {
+                    if (!username) throw new Error("Username required");
+                    await register(username, email, password);
+                    showToast("✅ Account created successfully!", "success");
+                }
+                showMainApp();
+            } catch (error) {
+                showToast(getFriendlyErrorMessage(error, 'auth'), "error");
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = isLoginMode ? "Login" : "Sign Up";
+            }
+        }
+
+        function showMainApp() {
+            document.getElementById('auth-screen').style.display = 'none';
+            document.querySelector('.app-container').style.display = 'block';
+            
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            const displayName = user.username || user.email || 'User';
+            document.getElementById('user-avatar').textContent = displayName.charAt(0).toUpperCase();
+            
+            // LOCK AUTHOR INPUT TO LOGGED IN USERNAME
+            document.getElementById('post-author').value = displayName; 
+            
+            // SHOW/HIDE ADMIN BUTTON
+            const adminBtn = document.getElementById('admin-panel-btn');
+            adminBtn.style.display = user.isAdmin ? 'inline-block' : 'none';
+            
+            showFeed();
+            autoLoadFeed();
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            cachedPosts = [];
+            document.querySelector('.app-container').style.display = 'none';
+            document.getElementById('auth-screen').style.display = 'flex';
+            document.getElementById('auth-form').reset();
+            clearForm();
+            showFeed();
+            showToast("👋 Logged out successfully.", "success");
+        }
+
+        // ==========================================
+        // 9. INITIALIZATION
+        // ==========================================
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('post-form').addEventListener('submit', handlePostSubmit);
+            document.getElementById('post-content').addEventListener('input', (e) => {
+                document.getElementById('char-counter').textContent = `${e.target.value.length} / 2000`;
+            });
+            document.getElementById('auth-form').addEventListener('submit', handleAuthSubmit);
+            
+            document.getElementById('edit-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const postId = document.getElementById('edit-post-id').value;
+                const authorName = document.getElementById('edit-author').value.trim();
+                const content = document.getElementById('edit-content').value.trim();
+                
+                try {
+                    await updatePost(postId, content, authorName);
+                    closeEditModal();
+                    showToast("✅ Post updated successfully!", "success");
+                    loadAdminData();
+                    autoLoadFeed();
+                } catch (error) {
+                    showToast(getFriendlyErrorMessage(error, 'post'), "error");
+                }
+            });
+
+            const token = localStorage.getItem('token');
+            if (token) {
+                showMainApp();
+            } else {
+                document.getElementById('auth-screen').style.display = 'flex';
+            }
+        });
+    </script>
+</body>
+</html>
